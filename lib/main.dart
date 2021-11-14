@@ -14,7 +14,6 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.deepOrange),
       routes: {
-        "/": (context) => HomePage(),
         "/users": (context) => UsersPage()
       },
       initialRoute: "/users",

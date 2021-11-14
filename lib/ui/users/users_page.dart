@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:github_users_search/ui/repositories/github_repos.dart';
 import 'package:http/http.dart' as http;
 
 class UsersPage extends StatefulWidget {
@@ -13,10 +14,12 @@ class _UsersPageState extends State<UsersPage> {
   bool notVisible = false;
   TextEditingController queryTextEditingController =
       new TextEditingController();
-  dynamic data;
+  dynamic userData;
   int currentPage = 0;
   int totalPages = 0;
   int pageSize = 20;
+  List<dynamic> userItemsList = [];
+  ScrollController scrollController = new ScrollController();
 
   void _search(String query) {
     String requestUrl =
@@ -24,18 +27,38 @@ class _UsersPageState extends State<UsersPage> {
     print(requestUrl);
     http.get(Uri.parse(requestUrl)).then((response) {
       setState(() {
-        data = json.decode(response.body);
+        userData = json.decode(response.body);
+        this.userItemsList.addAll(userData['items']);
 
-        if (data['total_count'] % pageSize == 0) {
+        if (userData['total_count'] % pageSize == 0) {
           //round results with integer division
-          totalPages = data['total_count'] ~/ pageSize;
-        }/* else if (data['total_count'] == 1){
-        }*/ else
-          totalPages = (data['total_count'] / pageSize).floor() + 1;
+          totalPages = userData['total_count'] ~/ pageSize;
+          /*} else if (userData['total_count'] <= pageSize) {
+          totalPages = 1;
+          currentPage = 1;*/
+        } else
+          totalPages = (userData['total_count'] / pageSize).floor() + 1;
       });
       //print("response length ${response.body.length}");
     }).catchError((error) {
       print(error);
+    });
+  }
+
+  //will be executed once before build method
+  @override
+  void initState() {
+    super.initState();
+    scrollController.addListener(() {
+      if (scrollController.position.pixels ==
+          scrollController.position.maxScrollExtent) {
+        setState(() {
+          if (currentPage < totalPages) {
+            ++currentPage;
+            _search(query);
+          }
+        });
+      }
     });
   }
 
@@ -44,7 +67,7 @@ class _UsersPageState extends State<UsersPage> {
     print("Building page...");
     return Scaffold(
       appBar:
-          AppBar(title: Text('Users => $query => $currentPage / $totalPages')),
+          AppBar(title: Text('User $query => $currentPage / $totalPages')),
       body: Center(
         child: Column(
           children: [
@@ -63,10 +86,15 @@ class _UsersPageState extends State<UsersPage> {
                       controller: queryTextEditingController,
                       decoration: InputDecoration(
                           suffixIcon: IconButton(
-                            icon: Icon(Icons.clear),
                             onPressed: () {
-                              queryTextEditingController.clear();
+                              setState(() {
+                                notVisible = !notVisible;
+                              });
                             },
+                            color: Colors.deepOrange,
+                            icon: Icon(notVisible == true
+                                ? Icons.visibility_off
+                                : Icons.visibility),
                           ),
                           contentPadding: EdgeInsets.only(left: 10),
                           border: OutlineInputBorder(
@@ -83,22 +111,23 @@ class _UsersPageState extends State<UsersPage> {
                   ),
                   child: IconButton(icon: Icon(Icons.search, color: Colors.white,), onPressed: (){}),
                 ),*/
+
                 IconButton(
+                  icon: Icon(Icons.clear),
+                  color: Colors.deepOrange,
                   onPressed: () {
                     setState(() {
-                      notVisible = !notVisible;
+                      queryTextEditingController.clear();
                     });
                   },
-                  color: Colors.deepOrange,
-                  icon: Icon(notVisible == true
-                      ? Icons.visibility_off
-                      : Icons.visibility),
                 ),
                 IconButton(
                     icon: Icon(Icons.search),
                     color: Colors.deepOrange,
                     onPressed: () {
                       setState(() {
+                        userItemsList = [];
+                        currentPage = 0;
                         this.query = queryTextEditingController.text;
                         //private fun indicated with _
                         _search(query);
@@ -107,29 +136,45 @@ class _UsersPageState extends State<UsersPage> {
               ],
             ),
             Expanded(
-              child: ListView.builder(
-                  itemCount: (data == null) ? 0 : data['items'].length,
+              child: ListView.separated(
+                  separatorBuilder: (context, index) => Divider(
+                        height: 1,
+                        color: Colors.deepOrange,
+                      ),
+                  controller: scrollController,
+                  itemCount: userItemsList.length,
+                  //itemCount: (userData == null) ? 0 : userData['items'].length,
                   itemBuilder: (context, index) {
                     return ListTile(
+                        onTap: () {
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => GithubRepos(
+                                      userName: userItemsList[index]['login'],
+                                      avatarUrl: userItemsList[index]
+                                          ['avatar_url'])));
+                        },
                         title: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            CircleAvatar(
-                              backgroundImage: NetworkImage(
-                                  data['items'][index]['avatar_url']),
-                              radius: 40,
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundImage: NetworkImage(
+                                      userItemsList[index]['avatar_url']),
+                                  radius: 40,
+                                ),
+                                SizedBox(width: 20),
+                                Text("${userItemsList[index]['login']}"),
+                              ],
                             ),
-                            SizedBox(width: 20),
-                            Text("${data['items'][index]['login']}"),
+                            //to display user score
+                            CircleAvatar(
+                              child: Text("${userItemsList[index]['score']}"),
+                            )
                           ],
-                        ),
-                        CircleAvatar(
-                          child: Text("${data['items'][index]['score']}"),
-                        )
-                      ],
-                    ));
+                        ));
                   }),
             )
           ],
